@@ -18,9 +18,10 @@
 - [x] Tests: RLS tests - 42/42 checks via `npm run verify:db` (PGlite harness, clean DB)
 
 ## Phase 3 - CORE INTELLIGENCE
-- [ ] Institution identity resolution (schema defined)
-- [ ] Duplicate and related-case detection (pending)
-- [ ] Cross-Bureau coordination (pending)
+- [x] Institution identity resolution — matching RPCs, review/confirm/reject workflow, no auto-merge
+- [x] Duplicate and related-case detection — SQL candidate pairs + TS classifier + labelled fixture set (12 fixtures, P=1.00 R=1.00)
+- [x] Cross-Bureau coordination — explainable flag refresh, reviewer assignment, audited decisions, grouped views
+- [ ] Pages (Institutions / Cross-Bureau / Duplicate Review) — scheduled with Phase 5 per master prompt §7
 
 ## Phase 4 - OPERATIONAL MONITORING
 - [ ] Ingestion and sync (pending)
@@ -59,7 +60,7 @@
 ## Phase 9 - FINAL VERIFICATION
 - [ ] App runs on localhost with seeded synthetic data (pending)
 - [ ] Typecheck, lint, tests and production build pass (passing so far)
-- [x] Migrations reproduce schema from scratch (verified on clean PGlite DB: `npm run verify:db` 42/42)
+- [x] Migrations reproduce schema from scratch (verified on clean PGlite DB: `npm run verify:db` 84/84)
 - [ ] Re-import creates no duplicates (pending)
 - [ ] Every dashboard number from database (pending)
 - [ ] UI follows Surreal Orange system at 390px and 1440px (pending)

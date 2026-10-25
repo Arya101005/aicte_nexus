@@ -104,7 +104,7 @@ select * from (values
   ('33333333-1111-1111-1111-111111111103'::uuid, '11111111-1111-1111-1111-111111111103'::uuid, 'AICTE', 'SYN-CMP-2026-003', 'AICTE', 'SYN-AICTE-REF-003',
    'Placement', 'High'::public.complaint_priority, 'Awaiting Information'::public.complaint_status, 'Placement cell vacancy',
    'Synthetic: insufficient placement coordination.',
-   now() - interval '50 days', now() - interval '35 days', null, null::uuid, now() - interval '25 days'),
+   now() - interval '50 days', now() - interval '35 days', null, null::uuid, now() - interval '35 days'),
   ('33333333-1111-1111-1111-111111111104'::uuid, '11111111-1111-1111-1111-111111111104'::uuid, 'AICTE', 'SYN-CMP-2026-004', 'AICTE', 'SYN-AICTE-REF-004',
    'Facilities', 'Urgent'::public.complaint_priority, 'Open'::public.complaint_status, 'Electrical safety inspection pending',
    'Synthetic: exposed wiring reported in main block.',
@@ -116,7 +116,15 @@ select * from (values
   ('33333333-1111-1111-1111-111111111106'::uuid, '11111111-1111-1111-1111-111111111101'::uuid, 'UGC', 'SYN-CMP-2026-006', 'UGC', 'SYN-UGC-REF-006',
    'Scholarships', 'Low'::public.complaint_priority, 'Open'::public.complaint_status, 'Scholarship disbursement delay',
    'Synthetic: disbursement cycle delayed for applicants.',
-   now() - interval '20 days', now() + interval '10 days', null, null::uuid, now() - interval '15 days')
+   now() - interval '20 days', now() + interval '10 days', null, null::uuid, now() - interval '15 days'),
+  ('33333333-1111-1111-1111-111111111107'::uuid, '11111111-1111-1111-1111-111111111101'::uuid, 'AICTE', 'SYN-CMP-2026-007', 'AICTE', 'SYN-AICTE-REF-007',
+   'Facilities', 'Medium'::public.complaint_priority, 'Open'::public.complaint_status, 'Delayed hostel repairs in block C',
+   'Synthetic: second report of hostel repair delays — near-duplicate of SYN-CMP-2026-001.',
+   now() - interval '15 days', now() + interval '6 days', null, null::uuid, now() - interval '6 hours'),
+  ('33333333-1111-1111-1111-111111111108'::uuid, '11111111-1111-1111-1111-111111111101'::uuid, 'UGC', 'SYN-CMP-2026-008', 'UGC', 'SYN-UGC-REF-008',
+   'Facilities', 'Low'::public.complaint_priority, 'Open'::public.complaint_status, 'Workshop seating shortage',
+   'Synthetic: older facilities case at the same institution — related but distinct.',
+   now() - interval '90 days', now() + interval '15 days', null, null::uuid, now() - interval '5 days')
 ) as v(id, institution_id, bureau, complaint_reference, source_system, source_reference,
        category, priority, status, subject, description, date_received, due_date, resolved_at, assigned_to, last_activity_at)
 where not exists (select 1 from public.complaints where complaint_reference = v.complaint_reference);
@@ -170,8 +178,8 @@ where c.complaint_reference = 'SYN-CMP-2026-001'
 insert into public.coordination_flags (id, complaint_id, flag_type, explanation, evidence, generated_at)
 select
   gen_random_uuid(), c.id, 'stale_case'::public.coordination_flag_type,
-  'Synthetic: no activity for 25 days on an open case.',
-  jsonb_build_object('days_since_activity', 25),
+  'Synthetic: no activity for 35 days on an open case.',
+  jsonb_build_object('days_since_activity', 35),
   now() - interval '1 day'
 from public.complaints c
 where c.complaint_reference = 'SYN-CMP-2026-003'

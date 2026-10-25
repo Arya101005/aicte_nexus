@@ -168,7 +168,8 @@ alter table public.institution_identifiers enable row level security;
 create policy "institution_identifiers: read all" on public.institution_identifiers
   for select to authenticated using (true);
 create policy "institution_identifiers: admin write" on public.institution_identifiers
-  for insert to authenticated with check (public.current_user_role() = 'admin');
+  for insert to authenticated
+  with check (public.current_user_role() in ('admin', 'reviewer'));
 create policy "institution_identifiers: admin update" on public.institution_identifiers
   for update to authenticated using (public.current_user_role() = 'admin')
   with check (public.current_user_role() = 'admin');
@@ -267,10 +268,11 @@ alter table public.complaint_audit enable row level security;
 create policy "complaint_audit: read all" on public.complaint_audit
   for select to authenticated using (true);
 
-create policy "complaint_audit: admin/bureau insert" on public.complaint_audit
+create policy "complaint_audit: admin/bureau/reviewer insert" on public.complaint_audit
   for insert to authenticated
   with check (
     public.current_user_role() = 'admin'
+    or public.current_user_role() = 'reviewer'
     or (public.current_user_role() = 'bureau_official'
         and exists (
           select 1 from public.complaints c
