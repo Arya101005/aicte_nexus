@@ -60,5 +60,19 @@
 
 14. **Responsive**: Sidebar collapses to drawer under lg; cards stack; tables become labelled card rows on mobile; no horizontal overflow; touch targets ≥ 44px.
 
+## Phase 2 Decisions (security & data integrity)
+
+15. **Migration verification harness**: Docker is not available in this environment, so `supabase start` cannot run, and native Postgres cluster backends crash with DLL-init errors here. Migrations and RLS are therefore verified against **PGlite** (real Postgres compiled to WASM) via `scripts/verify-migrations.mjs` (`npm run verify:db`), which bootstraps the Supabase runtime pieces the migrations depend on (roles `anon`/`authenticated`/`service_role`, the `auth` schema, `auth.uid()`), applies migrations + seed on a clean database, and runs 42 assertions covering idempotent seeding, RLS role/bureau isolation, audit immutability, RPC atomicity (forced audit failure rolls back the complaint update) and constraint enforcement. Applying migrations to the real Supabase project remains a manual step until credentials are available (listed under "Not verified").
+
+16. **Function creation order**: `current_user_role()`/`current_user_bureau()` are created *after* `public.profiles`. SQL-language function bodies have their relations resolved at creation time (`check_function_bodies`), so creating them earlier fails with `relation "public.profiles" does not exist`.
+
+17. **`anon` can execute the role helpers and `update_complaint_with_audit`**: without it a signed-out caller gets a raw `permission denied for function ...` instead of the designed friendly "You are signed out" message. The helpers only return the caller's own role/bureau derived from their own JWT subject, and the RPC raises before touching any row; RLS still applies to everything after that.
+
+18. **Seed file**: `supabase/seed.sql` is fully synthetic (labelled in its header, every row prefixed `SYN-`/"Synthetic") and idempotent — re-running it changes no row counts (asserted by the harness). Demo logins use `@nexus.local` addresses with `Demo123!` and are documented as local-development-only.
+
+19. **CSV safety** lives in `src/lib/csv.ts`: export path neutralizes cells starting with `=`, `+`, `-`, `@`, tab, CR (prefix `'`) and RFC 4180-quotes them; import path (`parseCsv`) enforces a 5 MiB byte limit, 50 000-row limit and 64-column limit, strips BOM, and throws `CsvParseError` with row/column context so callers can show a friendly message and log details server-side.
+
+20. **Attention-state precedence** (implemented in `public.complaint_attention_state`): Resolved/Closed → Normal; no matching SLA rule → Normal (age is shown, never "Overdue"); age beyond escalation threshold → Escalation Review Required; past effective due date → Overdue; no activity beyond `stale_days` → Stale; within warning window → Approaching Deadline; else Normal. Escalation is checked before overdue so old, ignored cases surface first.
+
 ## Ongoing Decisions
 - To be documented as project progresses

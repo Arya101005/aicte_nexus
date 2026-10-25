@@ -12,10 +12,10 @@
 - [x] Roles: admin, bureau_official, reviewer, read_only defined
 - [x] RLS: policies defined for all tables
 - [x] Constraints: foreign keys, NOT NULLs, CHECKs added
-- [ ] Transactions: atomic complaint updates with audit entries (trigger setup)
-- [ ] Errors: friendly messages, no stack traces
-- [ ] CSV safety: formula injection neutralization (pending implementation)
-- [ ] Tests: RLS tests (pending)
+- [x] Transactions: atomic complaint updates with audit entries (`update_complaint_with_audit` RPC)
+- [x] Errors: friendly messages, no stack traces (RPC raises friendly errors; harness-verified)
+- [x] CSV safety: formula injection neutralization + size/row limits (`src/lib/csv.ts`)
+- [x] Tests: RLS tests - 42/42 checks via `npm run verify:db` (PGlite harness, clean DB)
 
 ## Phase 3 - CORE INTELLIGENCE
 - [ ] Institution identity resolution (schema defined)
@@ -59,7 +59,7 @@
 ## Phase 9 - FINAL VERIFICATION
 - [ ] App runs on localhost with seeded synthetic data (pending)
 - [ ] Typecheck, lint, tests and production build pass (passing so far)
-- [ ] Migrations reproduce schema from scratch (pending verification)
+- [x] Migrations reproduce schema from scratch (verified on clean PGlite DB: `npm run verify:db` 42/42)
 - [ ] Re-import creates no duplicates (pending)
 - [ ] Every dashboard number from database (pending)
 - [ ] UI follows Surreal Orange system at 390px and 1440px (pending)
