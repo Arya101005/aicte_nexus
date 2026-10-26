@@ -1,38 +1,335 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Surreal Orange tokens (master prompt §6.2)
+   Orange is an accent, not a flood. Max two accents per component.
+   Status is always icon + text + color, never color alone.
+   --------------------------------------------------------------- */
+:root {
+  --ink: #1b1410;
+  --paper: #fbf3e6;
+  --surface: #ffffff;
+  --sand: #f2e1c8;
+  --orange: #f26a1b;
+  --orange-deep: #c2410c;
+  --apricot: #ffb27a;
+  --peach: #ffd9b8;
+  --terracotta: #b5472e;
+  --teal: #0f766e;
+  --indigo: #3b3fd9;
+  --muted: #6b5e52;
+  --line: #e5d3ba;
+
+  /* Neo-brutalist geometry */
+  --radius-card: 6px;
+  --radius-control: 4px;
+  --shadow-brutal: 4px 4px 0 var(--ink);
+  --shadow-brutal-lift: 6px 6px 0 var(--ink);
+  --border-brutal: 2px solid var(--ink);
+
+  --hero-gradient: linear-gradient(160deg, #ffb27a 0%, #f26a1b 55%, #c2410c 100%);
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sand: var(--sand);
+  --color-orange: var(--orange);
+  --color-orange-deep: var(--orange-deep);
+  --color-apricot: var(--apricot);
+  --color-peach: var(--peach);
+  --color-terracotta: var(--terracotta);
+  --color-teal: var(--teal);
+  --color-indigo: var(--indigo);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", monospace;
+}
 
 @layer base {
-  :root {
-    --background: #FBF3E6;
-    --foreground: #1B1410;
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-    --color-surface: var(--surface, #FFFFFF);
-    --color-ink: var(--ink, #1B1410);
-    --color-orange: var(--orange, #F26A1B);
-    --color-orange-deep: var(--orange-deep, #C2410C);
-    --color-apricot: var(--apricot, #FFB27A);
-    --color-peach: var(--peach, #FFD9B8);
-    --color-terracotta: var(--terracotta, #B5472E);
-    --color-teal: var(--teal, #0F766E);
-    --color-indigo: var(--indigo, #3B3FD9);
-    --color-muted: var(--muted, #6B5E52);
-    --color-line: var(--line, #E5D3BA);
-    --font-sans: var(--font-geist-sans);
-    --font-mono: var(--font-geist-mono);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: #1B1410;
-      --foreground: #FBF3E6;
-    }
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    background: var(--background);
-    color: var(--foreground);
+    background: var(--paper);
+    color: var(--ink);
     font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    /* No horizontal page overflow anywhere */
+    overflow-x: hidden;
+  }
+
+  /* Visible focus ring, everywhere (§8) */
+  :focus-visible {
+    outline: 3px solid var(--orange-deep);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--peach);
+    color: var(--ink);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer components {
+  /* -------------------------------------------------------------
+     Neo-Brutalist primitives (§6.3)
+     ------------------------------------------------------------- */
+  .brutal-card {
+    border: var(--border-brutal);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-brutal);
+  }
+
+  .brutal-lift {
+    transition:
+      transform 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .brutal-lift:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-brutal-lift);
+  }
+
+  .brutal-press:active {
+    transform: translate(0, 0);
+    box-shadow: none;
+  }
+
+  .brutal-input {
+    min-height: 44px;
+    width: 100%;
+    border: var(--border-brutal);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--ink);
+  }
+
+  .brutal-input::placeholder {
+    color: var(--muted);
+  }
+
+  /* Sticky-header data table (§6.3) */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--sand);
+    border-bottom: 2px solid var(--ink);
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .data-table tbody td {
+    border-bottom: 1px solid var(--line);
+    padding: 0.6rem 0.75rem;
+    vertical-align: top;
+  }
+
+  .data-table tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--sand) 45%, transparent);
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--peach);
+  }
+
+  /* Skip link (§8 a11y) */
+  .skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3.5rem;
+    z-index: 100;
+    border: var(--border-brutal);
+    border-radius: var(--radius-control);
+    background: var(--orange);
+    color: var(--ink);
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    transition: top 120ms ease;
+  }
+
+  .skip-link:focus {
+    top: 0.5rem;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Tables become labelled card rows below md (§7 responsive) */
+  @media (max-width: 767px) {
+    .responsive-table,
+    .responsive-table thead,
+    .responsive-table tbody,
+    .responsive-table tr,
+    .responsive-table th,
+    .responsive-table td {
+      display: block;
+    }
+
+    .responsive-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    .responsive-table tbody tr {
+      border-bottom: 2px solid var(--ink);
+      padding: 0.5rem 0.75rem;
+      background: var(--surface) !important;
+    }
+
+    .responsive-table tbody td {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 1px dashed var(--line);
+      padding: 0.4rem 0;
+      text-align: right;
+    }
+
+    .responsive-table tbody td:last-child {
+      border-bottom: 0;
+    }
+
+    .responsive-table tbody td::before {
+      content: attr(data-label);
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: left;
+    }
+  }
+}
+
+/* Skeleton base color (works with reduced motion too) */
+.skeleton {
+  background: var(--sand);
+}
+
+/* ---------------------------------------------------------------
+Motion (§6.7) — every animation is wrapped so that users who
+   prefer reduced motion get none of it. Nothing flashes; nothing
+   runs continuously over data regions (the orbit drift lives on
+   the dashboard hero illustration only).
+   --------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes orbit-drift {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes orbit-drift-reverse {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(-360deg);
+    }
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: -200% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+
+  .animate-rise {
+    animation: rise-in 260ms ease-out both;
+  }
+
+  .stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+
+  .animate-orbit {
+    animation: orbit-drift 20s linear infinite;
+    transform-origin: center;
+  }
+
+  .animate-orbit-reverse {
+    animation: orbit-drift-reverse 26s linear infinite;
+    transform-origin: center;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--sand) 25%,
+      var(--peach) 50%,
+      var(--sand) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
   }
 }

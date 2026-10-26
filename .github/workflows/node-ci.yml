@@ -1,0 +1,10 @@
+name: vercel-gated-ci
+on:
+  push:
+    branches: [ main ]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Configure VERCEL_TOKEN and org secret before gated deploys"

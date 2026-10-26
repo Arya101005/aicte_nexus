@@ -15,7 +15,7 @@ type SearchPageProps = {
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const q = searchParams.q?.trim() ?? ''
+  const q = (await searchParams).q?.trim() ?? ''
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">

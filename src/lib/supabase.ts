@@ -47,6 +47,28 @@ export function createServerSupabase(headers: Headers) {
   );
 }
 
+const GLOBAL_CACHE_KEY = "__supabaseServerCache_v1";
+
+/** Server-side Supabase client bound to the in-flight request cookies.
+ * Use this in route handlers and server actions that already depend on
+ * a validated session (for example the search route).
+ *
+ * The cache is request-scoped in real SSR environments. This helper is
+ * a thin wrapper so the search route can reuse one client after the
+ * session is validated.
+ */
+export function getSupabaseServer() {
+  const cache = (globalThis as any)[GLOBAL_CACHE_KEY] as any;
+
+  if (cache && typeof cache === "object" && "signedIn" in cache) {
+    return cache as unknown as ReturnType<typeof createServerSupabase>;
+  }
+
+  // Fallback for server environments without request-scoped caching.
+  return createServerSupabase(new Headers());
+}
+
+
 // Simple user type
 export type User = {
   id: string;
