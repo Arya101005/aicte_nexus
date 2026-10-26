@@ -426,12 +426,16 @@ create trigger t_coordination_flags_updated_at before update on public.coordinat
   for each row execute function public.set_updated_at();
 
 -- Touch last_activity_at on any complaint change (feeds staleness signals).
+-- An explicit last_activity_at in the UPDATE (imports, backfills, seeds)
+-- wins over the trigger so historical activity can be restored.
 create or replace function public.touch_complaint_activity()
 returns trigger
 language plpgsql
 as $$
 begin
-  new.last_activity_at = now();
+  if new.last_activity_at = old.last_activity_at then
+    new.last_activity_at = now();
+  end if;
   return new;
 end;
 $$;

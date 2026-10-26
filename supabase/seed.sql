@@ -136,6 +136,14 @@ update public.complaints c set assigned_to = u.id
     and c.complaint_reference = 'SYN-CMP-2026-003'
     and c.assigned_to is null;
 
+-- The assignment above counted as activity (activity trigger). Restore
+-- this case's historical last_activity_at explicitly: the value differs
+-- from the stored one, so the trigger lets the explicit value through.
+update public.complaints
+set last_activity_at = now() - interval '35 days'
+where complaint_reference = 'SYN-CMP-2026-003'
+  and last_activity_at > now() - interval '1 hour';
+
 -- ------------------------------------------------------------
 -- 6. Synthetic audit history (via the atomic RPC where possible)
 -- ------------------------------------------------------------

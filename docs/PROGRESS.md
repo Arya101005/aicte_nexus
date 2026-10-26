@@ -24,11 +24,13 @@
 - [ ] Pages (Institutions / Cross-Bureau / Duplicate Review) — scheduled with Phase 5 per master prompt §7
 
 ## Phase 4 - OPERATIONAL MONITORING
-- [ ] Ingestion and sync (pending)
-- [ ] SLA monitoring (schema defined)
-- [ ] Data Quality dashboard (pending)
-- [ ] Notifications (pending)
-- [ ] Reports (pending)
+- [x] Ingestion and sync — `import_jobs`/`import_errors` + idempotent `import_complaints` RPC; TS adapters (`parse → validate → normalize`) for CSV/JSON
+- [x] SLA monitoring — attention-state view + aggregates (schema, harness-verified)
+- [x] Data Health — `v_data_health`/`v_import_health` honest states incl. Not configured
+- [x] Notifications — table + dedupe on read (harness-verified)
+- [x] Reports — permission-aware aggregate views (harness-verified)
+- [x] Harness: `npm run verify:db` 126/126; adapter tests pass; tsc/lint/build clean
+- [ ] Pages (Import / Data Health / SLA / Reports / Notifications) — scheduled with Phase 5 per master prompt §7
 
 ## Phase 5 - DESIGN SYSTEM: SURREAL ORANGE
 - [x] Tokens defined (CSS variables + Tailwind)
@@ -60,7 +62,7 @@
 ## Phase 9 - FINAL VERIFICATION
 - [ ] App runs on localhost with seeded synthetic data (pending)
 - [ ] Typecheck, lint, tests and production build pass (passing so far)
-- [x] Migrations reproduce schema from scratch (verified on clean PGlite DB: `npm run verify:db` 84/84)
+- [x] Migrations reproduce schema from scratch (verified on clean PGlite DB: `npm run verify:db` 126/126)
 - [ ] Re-import creates no duplicates (pending)
 - [ ] Every dashboard number from database (pending)
 - [ ] UI follows Surreal Orange system at 390px and 1440px (pending)

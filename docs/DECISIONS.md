@@ -90,5 +90,21 @@
 
 27. **`normalized_subject`** is a SQL generated column (immutable-unaccent, lowercase); `normalizeSubject()` in TypeScript mirrors it with NFD combining-mark stripping. ASCII subjects match exactly; exotic transliterations are decided by SQL similarity, never by the TS mirror.
 
+## Phase 4 Decisions (operational monitoring)
+
+28. **Migration `20250101000004_operations.sql`**: notifications, `import_jobs`/`import_errors`, the `import_complaints` batch upsert RPC, and the health/quality/SLA/report views. `import_complaints` takes a `jsonb` array of already-validated drafts, upserts on `(source_system, source_reference)` (`excluded`-style: created/updated/unchanged counted per row), and returns counts — so re-importing the same file creates zero duplicates (harness asserts row counts unchanged after a second import).
+
+29. **Idempotency is decided in SQL, not the app**: `import_complaints` compares every column against the existing row and reports `unchanged` without writing, so a repeated upload costs no audit noise and produces honest counts. Rejected rows never touch `complaints`; they land in `import_errors` with row/field/reason.
+
+30. **Attention states and health states are SQL views** (`v_complaint_sla`, `v_data_health`, `v_import_health`): the browser never recomputes due/stale logic. `Not configured` is distinct from `Healthy` — configured ≠ healthy; a source with no recent successful job reports `Delayed`/`Failed` from job history.
+
+31. **TS adapter layer** (`src/lib/import/adapters.ts`): `parseComplaintCsv`/`parseComplaintJson` → `validateComplaintRows` → normalized drafts. CSV headers are strict (unknown column → `CsvParseError`); JSON records tolerate extra keys (common in JSON exports). Validation errors carry row + field + friendly reason for `import_errors`. Formula neutralization stays **export-side only** — imports store cells raw (harness/test asserts `=SUM(A1)` survives import untouched); escaping on import would corrupt source data.
+
+32. **Institution name normalization** (`src/lib/institutions.ts`) mirrors the SQL generated column: trim, collapse whitespace, NFD-strip combining marks, lowercase, punctuation removed. `namesExactMatch` is the TS twin of the SQL normalized-name exact match used by identity resolution.
+
+33. **`last_activity_at` trigger precedence**: assignment updates legitimately bump activity, but an *explicitly supplied* value (seed/backfill) wins over the trigger's default bump — implemented as `COALESCE(new.last_activity_at, now())` logic in `t_complaints_activity`.
+
+34. **Harness verified**: `npm run verify:db` now runs 126 checks on a clean PGlite database — including double-import idempotency, notification dedupe, data-health states, quality metrics, SLA aggregates and permission-aware report views.
+
 ## Ongoing Decisions
 - To be documented as project progresses

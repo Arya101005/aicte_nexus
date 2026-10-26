@@ -872,6 +872,394 @@ check(
 );
 
 // ------------------------------------------------------------
+// Phase 4: import pipeline (idempotent by stable source keys)
+// ------------------------------------------------------------
+console.log('== Phase 4: import pipeline ==');
+const complaintsCount = () => count('select count(*)::int as n from public.complaints');
+
+// Data Health is honest before anything is configured.
+await asSuper();
+const health0 = (
+  await db.query('select source_system, health_state from public.v_source_health order by source_system')
+).rows;
+check(
+  'data health reports Not configured before any import',
+  health0.length > 0 && health0.every((r) => r.health_state === 'Not configured'),
+  JSON.stringify(health0),
+);
+
+await asUser(viewerId);
+await expectError(
+  'read_only cannot run imports',
+  () => db.query('select public.begin_import_job($1, $2, $3)', ['x.csv', 'TESTSRC', 'complaints']),
+  ['Only administrators'],
+);
+
+await asUser(adminId);
+const fileA = [
+  'TESTSRC',
+  'SRC-100',
+  'IMP-2026-001',
+  'AICTE',
+  'Facilities',
+  'Medium',
+  'Open',
+  'Imported canteen complaint',
+  'Synthetic row created by the import pipeline check.',
+  new Date(Date.now() - 3 * 86_400_000).toISOString(),
+  null, // due date deliberately absent: no invented deadlines
+  null,
+  null,
+  'Nonexistent Polytechnic of Technology', // must stay unresolved (exact match only)
+];
+
+const job1 = (
+  await db.query("select * from public.begin_import_job('complaints.csv', 'TESTSRC', 'complaints')")
+).rows[0];
+check(
+  'import job starts as running',
+  job1?.status === 'running' && Boolean(job1?.started_at),
+  JSON.stringify([job1?.status, job1?.started_at]),
+);
+const beforeImport = await complaintsCount();
+const u1 = (await db.query('select public.upsert_complaint_from_import($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) as r', fileA)).rows[0].r;
+check(
+  'new row is created and unmatched institution stays unresolved',
+  u1.result === 'created' && u1.institution_note === 'institution_unmatched' && u1.institution_id === null,
+  JSON.stringify(u1),
+);
+check('complaint count grew by exactly one', (await complaintsCount()) === beforeImport + 1);
+
+const err1 = (
+  await db.query(
+    'select * from public.record_import_error($1, $2, $3, $4, $5)',
+    [job1.id, 2, 'priority', 'Unknown priority "Critical"', '=CMD()'],
+  )
+).rows[0];
+check(
+  'rejected row captured with formula-neutralized value',
+  err1?.raw_value === '=CMD()' && err1?.neutralized_value === "'=CMD()",
+  JSON.stringify([err1?.raw_value, err1?.neutralized_value]),
+);
+const fin1 = (
+  await db.query('select * from public.finish_import_job($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
+    job1.id, 'completed', 2, 1, 0, 0, 1, 0, '{}',
+  ])
+).rows[0];
+check(
+  'import job finishes with counts + timestamps',
+  fin1?.status === 'completed' && Number(fin1?.created_rows) === 1 && Number(fin1?.rejected_rows) === 1 && Boolean(fin1?.completed_at),
+  JSON.stringify([fin1?.status, fin1?.created_rows, fin1?.rejected_rows]),
+);check(
+  'rejected rows immediately put the source in Awaiting verification',
+  (await db.query("select health_state from public.v_source_health where source_system = 'TESTSRC'"))
+    .rows[0]?.health_state === 'Awaiting verification',
+);
+
+// THE headline idempotency claim: replay file A -> zero duplicates.
+const countAfterJob1 = await complaintsCount();
+const job2 = (
+  await db.query("select * from public.begin_import_job('complaints.csv', 'TESTSRC', 'complaints')")
+).rows[0];
+const u2 = (await db.query('select public.upsert_complaint_from_import($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) as r', fileA)).rows[0].r;
+await db.query('select public.finish_import_job($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
+  job2.id, 'completed', 2, 0, 0, 1, 1, 0, '{}',
+]);
+check(
+  're-importing the same file creates zero duplicates (row is unchanged)',
+  u2.result === 'unchanged' && (await complaintsCount()) === countAfterJob1,
+  JSON.stringify([u2.result, await complaintsCount()]),
+);
+
+// A changed file updates in place; a changed reference is flagged, not lost.
+const fileB = [...fileA];
+fileB[2] = 'IMP-2026-001B';
+fileB[7] = 'Imported canteen complaint - updated';
+const job3 = (
+  await db.query("select * from public.begin_import_job('complaints-v2.csv', 'TESTSRC', 'complaints')")
+).rows[0];
+const u3 = (await db.query('select public.upsert_complaint_from_import($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) as r', fileB)).rows[0].r;
+await db.query('select public.finish_import_job($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
+  job3.id, 'completed', 1, 0, 1, 0, 0, 0, '{}',
+]);
+check(
+  'changed reference on the same source key is reported as conflicting',
+  u3.result === 'conflicting',
+  JSON.stringify(u3),
+);
+const job4 = (
+  await db.query("select * from public.begin_import_job('complaints-v2.csv', 'TESTSRC', 'complaints')")
+).rows[0];
+const u4 = (await db.query('select public.upsert_complaint_from_import($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) as r', fileB)).rows[0].r;
+await db.query('select public.finish_import_job($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
+  job4.id, 'completed', 1, 0, 0, 1, 0, 0, '{}',
+]);
+check('replaying the changed file is also unchanged', u4.result === 'unchanged', JSON.stringify(u4));
+
+await expectError(
+  'import rows without source keys are rejected up front',
+  () =>
+    db.query('select public.upsert_complaint_from_import($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) as r', [
+      'TESTSRC', '', 'IMP-X', 'AICTE', 'Facilities', 'Medium', 'Open', 'x',
+      null, null, null, null, null, null,
+    ]),
+  ['required'],
+);
+
+// Reconciliation: absent rows are reported, never deleted.
+await asUser(reviewerId);
+const missingRows = (
+  await db.query("select * from public.find_missing_from_export('AICTE', array['SYN-AICTE-REF-001'])")
+).rows;
+check(
+  'missing-from-export reports every absent record with a never-delete note',
+  missingRows.length === 3 && missingRows.every((r) => r.note.includes('never deleted')),
+  JSON.stringify(missingRows.map((r) => r.missing_reference)),
+);
+check('absence from an export never deletes a record', (await complaintsCount()) === countAfterJob1 + 0 + 0, `count ${await complaintsCount()}`);
+
+// Health states: Failed, Delayed, Awaiting verification.
+await asUser(adminId);
+const job5 = (
+  await db.query("select * from public.begin_import_job('ugc.csv', 'UGC', 'complaints')")
+).rows[0];
+await db.query('select public.finish_import_job($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
+  job5.id, 'failed', 0, 0, 0, 0, 0, 3, JSON.stringify({ error: 'malformed rows' }),
+]);
+const ugcHealth = (
+  await db.query("select health_state from public.v_source_health where source_system = 'UGC'")
+).rows[0]?.health_state;
+check('a failed latest import reports Failed', ugcHealth === 'Failed', ugcHealth);
+
+const job6 = (
+  await db.query("select * from public.begin_import_job('aicte.csv', 'AICTE', 'complaints')")
+).rows[0];
+await db.query('select public.finish_import_job($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
+  job6.id, 'completed', 0, 0, 0, 0, 0, 0, '{}',
+]);
+const aicteHealthy = (
+  await db.query("select health_state from public.v_source_health where source_system = 'AICTE'")
+).rows[0]?.health_state;
+check('a recent clean import reports Healthy', aicteHealthy === 'Healthy', aicteHealthy);
+
+await asSuper();
+await db.query(
+  'update public.import_jobs set created_at = now() - interval \'9 days\', started_at = now() - interval \'9 days\', completed_at = now() - interval \'9 days\' + interval \'1 minute\' where id = $1',
+  [job6.id],
+);
+await asUser(reviewerId);
+const aicteDelayed = (
+  await db.query("select health_state from public.v_source_health where source_system = 'AICTE'")
+).rows[0]?.health_state;
+check('an import older than 7 days reports Delayed', aicteDelayed === 'Delayed', aicteDelayed);
+
+await asUser(adminId);
+const job7 = (
+  await db.query("select * from public.begin_import_job('aicte-v2.csv', 'AICTE', 'complaints')")
+).rows[0];
+await db.query('select public.finish_import_job($1, $2, $3, $4, $5, $6, $7, $8, $9)', [
+  job7.id, 'completed', 5, 4, 0, 0, 1, 0, '{}',
+]);
+await asUser(reviewerId);
+const aicteAwaiting = (
+  await db.query("select health_state from public.v_source_health where source_system = 'AICTE'")
+).rows[0]?.health_state;
+check(
+  'rejected rows put the source in Awaiting verification',
+  aicteAwaiting === 'Awaiting verification',
+  aicteAwaiting,
+);
+
+// ------------------------------------------------------------
+// Phase 4: notifications (persisted, deduped, per-user)
+// ------------------------------------------------------------
+console.log('== Phase 4: notifications ==');
+await asSuper();
+const ugcId = await idOf('ugc@nexus.local');
+await asUser(adminId);
+// Assigning a complaint notifies exactly once (dedupe key = audit event).
+await db.query('select * from public.update_complaint_with_audit($1, $2, $3, $4, $5)', [
+  c2, null, null, ugcId, 'Phase 4 assignment check',
+]);
+await asSuper(); // cross-user notification rows are hidden by RLS from `authenticated`
+const ugcNotifs1 = (
+  await db.query("select * from public.notifications where user_id = $1 and type = 'assignment'", [ugcId])
+).rows;
+check(
+  'assignment creates one notification for the assignee',
+  ugcNotifs1.length === 1 && ugcNotifs1[0].read_at === null,
+  `count ${ugcNotifs1.length}`,
+);
+await asUser(adminId);
+await db.query('select * from public.update_complaint_with_audit($1, $2, $3, $4, $5)', [
+  c2, null, null, ugcId, 'Phase 4 assignment check repeated',
+]);
+await asSuper();
+const ugcNotifs2 = (
+  await db.query("select * from public.notifications where user_id = $1 and type = 'assignment'", [ugcId])
+).rows;
+check('re-processing the same assignment creates no repeat', ugcNotifs2.length === 1, `count ${ugcNotifs2.length}`);
+
+// Prepare events for refresh_notifications.
+await asUser(reviewerId);
+const flagOn6Decision = (
+  await db.query(
+    "select * from public.decide_coordination_flag($1, 'accepted', 'Coordinated with the other bureau on this deadline.')",
+    [flagOn6.id],
+  )
+).rows;
+check('flag decision still works after migration 0004', flagOn6Decision[0]?.review_status === 'accepted');
+await db.query('select * from public.upsert_duplicate_review($1, $2, $3, $4, $5, $6)', [
+  c1,
+  c8,
+  'Related but distinct',
+  'Same institution and category but received 74 days apart',
+  JSON.stringify({ same_institution: true, same_category: true, days_apart: 74 }),
+  0.2,
+]);
+
+const n1 = (await db.query('select public.refresh_notifications() as n')).rows[0].n;
+check(
+  'refresh creates exactly the expected notifications',
+  Number(n1) === 4,
+  `created ${n1}`,
+);
+const n2 = (await db.query('select public.refresh_notifications() as n')).rows[0].n;
+check('notification refresh is idempotent (dedupe keys)', Number(n2) === 0, `created ${n2}`);
+
+// Type-wide counts: read as superuser (owners only see their own rows).
+await asSuper();
+check(
+  'pending duplicate suggestion notifies reviewers + admins',
+  (await count("select count(*)::int as n from public.notifications where type = 'duplicate_review'")) === 2,
+);
+check(
+  'failed import notifies admins',
+  (await count("select count(*)::int as n from public.notifications where type = 'import_failed'")) === 1,
+);
+check(
+  'accepted assigned flag notifies its reviewer',
+  (await count("select count(*)::int as n from public.notifications where type = 'coordination_resolved'")) === 1,
+);
+const adminDupNotif = (
+  await db.query("select id from public.notifications where type = 'duplicate_review' and user_id = $1", [adminId])
+).rows[0];
+
+await asUser(viewerId);
+await expectError(
+  'read_only cannot refresh notifications',
+  () => db.query('select public.refresh_notifications()'),
+  ['Only admins and reviewers'],
+);
+await expectError(
+  'users cannot mark someone else\'s notification read',
+  () => db.query('select public.mark_notification_read($1)', [adminDupNotif.id]),
+  ['Notification not found'],
+);
+await asUser(adminId);
+const markedRead = (
+  await db.query('select * from public.mark_notification_read($1)', [adminDupNotif.id])
+).rows;
+check('owner can mark their notification read', Boolean(markedRead[0]?.read_at), markedRead[0]?.read_at);
+
+// ------------------------------------------------------------
+// Phase 4: data quality metrics (errors vs warnings)
+// ------------------------------------------------------------
+console.log('== Phase 4: data quality ==');
+await asUser(reviewerId);
+const quality = (metric) =>
+  db.query('select metric_count from public.v_data_quality where metric = $1', [metric]).then(
+    (r) => Number(r.rows[0]?.metric_count),
+  );
+check('constraint-proven: complaints always have a Bureau', (await quality('complaints without a Bureau')) === 0);
+check(
+  'constraint-proven: no invalid or inconsistent dates',
+  (await quality('invalid or inconsistent dates')) === 0,
+);
+check(
+  'imported complaint without an institution is surfaced as a warning',
+  (await quality('complaints without an institution link')) === 1,
+);
+check('pending identifier verifications counted', (await quality('pending identifier verifications')) === 1);
+check('disputed identifiers counted as errors', (await quality('disputed identifier verifications')) === 1);
+check('failed imports counted as errors', (await quality('failed imports')) === 1);
+check('pending duplicate suggestions counted', (await quality('pending duplicate suggestions')) === 1);
+check('open coordination flags counted', (await quality('open coordination flags')) === 4);
+
+// ------------------------------------------------------------
+// Phase 4: SLA summary + report overview (server-side aggregates)
+// ------------------------------------------------------------
+console.log('== Phase 4: SLA summary + reports ==');
+const slaSummary = (
+  await db.query('select * from public.get_sla_summary($1, $2)', [
+    new Date(Date.now() - 180 * 86_400_000).toISOString(),
+    new Date().toISOString(),
+  ])
+).rows;
+const slaOf = (bureau) => slaSummary.find((r) => r.bureau === bureau);
+const aicteSla = slaOf('AICTE');
+const ugcSla = slaOf('UGC');
+check(
+  'SLA summary counts open/approaching/overdue per bureau from SQL',
+  Number(aicteSla?.open_cases) === 5 &&
+    Number(aicteSla?.approaching) === 3 &&
+    Number(aicteSla?.overdue) === 1 &&
+    Number(aicteSla?.awaiting_info) === 1 &&
+    Number(aicteSla?.stale) === 1,
+  JSON.stringify(aicteSla),
+);
+check(
+  'UGC SLA row: open 3, approaching 1, none overdue/stale',
+  Number(ugcSla?.open_cases) === 3 &&
+    Number(ugcSla?.approaching) === 1 &&
+    Number(ugcSla?.overdue) === 0 &&
+    Number(ugcSla?.stale) === 0,
+  JSON.stringify(ugcSla),
+);
+check(
+  'average resolution only reported with valid samples',
+  Number(ugcSla?.resolution_samples) === 1 &&
+    Math.abs(Number(ugcSla?.avg_resolution_days) - 13) < 0.1 &&
+    Number(aicteSla?.resolution_samples) === 0 &&
+    aicteSla?.avg_resolution_days === null,
+  JSON.stringify([ugcSla?.avg_resolution_days, aicteSla?.avg_resolution_days]),
+);
+
+const overview = (
+  await db.query('select * from public.get_report_overview($1, $2, $3)', [
+    new Date(Date.now() - 180 * 86_400_000).toISOString(),
+    new Date().toISOString(),
+    null,
+  ])
+).rows[0];
+check(
+  'report overview aggregates the database (not the client)',
+  Number(overview?.total_received) === 9 &&
+    Number(overview?.open_now) === 8 &&
+    Number(overview?.resolved_in_period) === 1 &&
+    Number(overview?.overdue_now) === 1 &&
+    Number(overview?.cross_bureau_institutions) === 1 &&
+    Number(overview?.pending_duplicates) === 1 &&
+    Number(overview?.confirmed_duplicates) === 1 &&
+    Number(overview?.active_flags) === 4,
+  JSON.stringify(overview),
+);
+const overviewUgc = (
+  await db.query('select * from public.get_report_overview($1, $2, $3)', [
+    new Date(Date.now() - 180 * 86_400_000).toISOString(),
+    new Date().toISOString(),
+    'UGC',
+  ])
+).rows[0];
+check(
+  'report overview is permission-aware per bureau',
+  Number(overviewUgc?.total_received) === 4 &&
+    Number(overviewUgc?.open_now) === 3 &&
+    Number(overviewUgc?.confirmed_duplicates) === 0,
+  JSON.stringify(overviewUgc),
+);
+
+// ------------------------------------------------------------
 // Summary
 // ------------------------------------------------------------
 const failed = results.filter((r) => !r.ok);
