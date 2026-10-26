@@ -1,8 +1,9 @@
-import { Suspense } from 'react'
+import { notFound } from 'next/navigation'
+
 import { AlertTriangle, Building2, FileText, Search } from 'lucide-react'
+
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingSkeleton, ErrorState } from '@/components/ui'
-import { getSupabaseData } from '@/lib/getSupabaseData/headless'
-import { SearchResult } from './search-result'
+import SearchResult from './search-result'
 
 export const metadata = {
   title: 'Search',

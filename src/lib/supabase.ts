@@ -58,7 +58,7 @@ const GLOBAL_CACHE_KEY = "__supabaseServerCache_v1";
  * session is validated.
  */
 export function getSupabaseServer() {
-  const cache = (globalThis as any)[GLOBAL_CACHE_KEY] as any;
+  const cache = (globalThis as Record<string, unknown>)[GLOBAL_CACHE_KEY];
 
   if (cache && typeof cache === "object" && "signedIn" in cache) {
     return cache as unknown as ReturnType<typeof createServerSupabase>;

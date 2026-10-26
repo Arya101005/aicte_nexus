@@ -25,10 +25,12 @@ type Complaint = {
 }
 
 export async function getSearchResults(query: string) {
-  if (!query.trim()) notFound()
+  if (!query.trim()) {
+    notFound()
+    return
+  }
 
   const like = `%${query}%`
-
   const res = await fetch(
     `https://${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/sql`,
     {
@@ -75,6 +77,7 @@ export async function getSearchResults(query: string) {
     throw new Error(`Search failed: ${res.status}`)
   }
 
+  // NOTE: this function is async - the `await` below requires async
   const rows: Array<{
     id: string
     complaint_reference: string
@@ -115,8 +118,8 @@ export async function getSearchResults(query: string) {
   return { institutions, complaints }
 }
 
-export async function SearchResult({ query }: SearchResultProps) {
-  let results
+export default async function SearchResult({ query }: SearchResultProps) {
+  let results: Awaited<ReturnType<typeof getSearchResults>> | undefined
   try {
     results = await getSearchResults(query)
   } catch (err) {
@@ -133,6 +136,9 @@ export async function SearchResult({ query }: SearchResultProps) {
         </div>
       </div>
     )
+  }
+  if (!results) {
+    return null
   }
 
   const institutionRows = results.institutions.map((inst) => ({
@@ -162,10 +168,9 @@ export async function SearchResult({ query }: SearchResultProps) {
   return (
     <div className="space-y-8">
       <PageHeader
-        title={`Results for “${query}”`}
+        title={`Results for "${query}"`}
         subtitle={`${institutionRows.length} institution${institutionRows.length === 1 ? '' : 's'} · ${complaintRows.length} complaint${complaintRows.length === 1 ? '' : 's'}`}
       />
-
       {institutionRows.length > 0 && (
         <div>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -193,13 +198,13 @@ export async function SearchResult({ query }: SearchResultProps) {
           />
         </div>
       )}
-
       {complaintRows.length > 0 && (
         <div>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
             Complaints
           </h2>
-          <DataTable          columns={[
+          <DataTable
+            columns={[
               {
                 header: 'Reference',
                 cell: (row) => (
@@ -222,15 +227,15 @@ export async function SearchResult({ query }: SearchResultProps) {
                 header: 'Priority',
                 cell: (row) => (
                   <span
-                    className={`inline-flex items-center rounded-[4px] border-2 border-[var(--ink)] px-2 py-0.5 text-xs font-semibold ${
+                    className={`inline-flex items-center rounded-[4px] border-2 border-[var(--ink)] px-2 py-0.5 text-xs font-semibold ${[
                       row.priority === 'Urgent'
                         ? 'bg-[var(--orange-deep)] text-white'
                         : row.priority === 'High'
                           ? 'bg-[var(--orange)] text-[var(--ink)]'
                           : row.priority === 'Medium'
                             ? 'bg-[var(--sand)] text-[var(--ink)]'
-                            : 'bg-[var(--surface)] text-[var(--ink)]'
-                    }`}
+                            : 'bg-[var(--surface)] text-[var(--ink)]',
+                    ]}`}
                   >
                     {row.priority}
                   </span>
@@ -257,11 +262,10 @@ export async function SearchResult({ query }: SearchResultProps) {
           />
         </div>
       )}
-
       {institutionRows.length === 0 && complaintRows.length === 0 && (
         <EmptyState
           title="No results"
-          detail={`No institutions or complaints matched “${query}”. Try a different term, or check the spelling.`}
+          detail={`No institutions or complaints matched "${query}". Try a different term, or check the spelling.`}
         />
       )}
     </div>

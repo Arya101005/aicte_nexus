@@ -132,6 +132,6 @@ export function useSupabaseServer(headers: Headers) {
   // Mutate the global cache object so both files see the same request-scoped
   // client. The type-only index signature is corrected here so TypeScript
   // and the guardrail diff both accept the assignment.
-  (globalThis as any)["__supabaseServerCache_v1"] = client;
+  (globalThis as Record<string, unknown>)["__supabaseServerCache_v1"] = client;
   return client;
 }
