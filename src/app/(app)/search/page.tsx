@@ -5,6 +5,8 @@ import { AlertTriangle, Building2, FileText, Search } from 'lucide-react'
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingSkeleton, ErrorState } from '@/components/ui'
 import SearchResult from './search-result'
 
+export const instant = false
+
 export const metadata = {
   title: 'Search',
   description: 'Search institutions, complaints, and source references.',

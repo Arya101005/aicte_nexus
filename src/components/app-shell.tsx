@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -17,11 +17,10 @@ import {
   Search,
   Menu,
   X,
-  LogOut,
 } from "lucide-react";
 import { NotificationBell } from "@/components/ui";
-import { createBrowserSupabase } from "@/lib/supabase";
-import type { Profile } from "@/lib/session";
+
+type Profile = null;
 
 type NavItem = {
   href: string;
@@ -44,12 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Admin", icon: ShieldCheck, adminOnly: true },
 ];
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: "Administrator",
-  bureau_official: "Bureau Official",
-  reviewer: "Reviewer",
-  read_only: "Read Only",
-};
+
 
 function NavList({
   items,
@@ -91,28 +85,20 @@ export function AppShell({
   unread,
   children,
 }: {
-  profile: Profile | null;
+  profile: null;
   unread: number;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
 
-  const items = NAV_ITEMS.filter(
-    (item) => !item.adminOnly || profile?.role === "admin"
-  );
+  const items = NAV_ITEMS.filter(() => true);
 
   const onSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const q = new FormData(e.currentTarget).get("q");
     const query = typeof q === "string" ? q.trim() : "";
     if (query) router.push(`/search?q=${encodeURIComponent(query)}`);
-  };
-
-  const signOut = async () => {
-    const supabase = createBrowserSupabase();
-    if (supabase) await supabase.auth.signOut();
-    router.replace("/login");
   };
 
   const sidebar = (
@@ -130,20 +116,12 @@ export function AppShell({
 
       <div className="mt-auto border-t-2 border-[var(--line)] pt-4">
         <p className="truncate text-sm font-semibold text-[var(--ink)]">
-          {profile?.full_name ?? profile?.bureau ?? "Signed in"}
+          AICTE Nexus
         </p>
         <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
-          {profile ? ROLE_LABEL[profile.role] ?? profile.role : "No profile"}
-          {profile?.bureau ? ` · ${profile.bureau}` : ""}
+          Demo data is synthetic and labelled. Not for official use.
         </p>
-        <button
-          type="button"
-          onClick={signOut}
-          className="mt-3 flex min-h-[44px] w-full items-center gap-2 rounded-[4px] border-2 border-[var(--ink)] bg-[var(--surface)] px-3 text-sm font-semibold hover:bg-[var(--peach)]"
-        >
-          <LogOut aria-hidden="true" size={15} />
-          Sign out
-        </button>
+
         <p className="mt-3 text-[10px] leading-relaxed text-[var(--muted)]">
           Demo data is synthetic and labelled. Not for official use.
         </p>
